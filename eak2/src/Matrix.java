@@ -15,7 +15,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class Matrix {
 
-    private static ThreadLocal<DecimalFormat> NUMBER_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("0.00"));
+    protected static ThreadLocal<DecimalFormat> NUMBER_FORMAT = ThreadLocal
+            .withInitial(() -> new DecimalFormat("0.00"));
 
     /**
      * Létrehoz egy n-edrendû egységmátrixot.
@@ -75,7 +76,7 @@ public class Matrix {
      * A mátrixszorzás algoritmusa. Nem szálbiztos, ezt kívülről kell
      * biztosítani.
      */
-    private static Matrix doMultiplyAlgorithm(final Matrix matrix1, final Matrix matrix2) {
+    protected static Matrix doMultiplyAlgorithm(final Matrix matrix1, final Matrix matrix2) {
         Matrix result = new Matrix(matrix1.n, matrix2.m);
 
         for (int i = 0; i < matrix1.n; ++i) {
@@ -91,8 +92,8 @@ public class Matrix {
         return result;
     }
 
-    private final BigDecimal[] data;
-    private final int n, m;
+    protected final BigDecimal[] data;
+    protected final int n, m;
 
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     private final Lock readLock = readWriteLock.readLock();
@@ -153,9 +154,9 @@ public class Matrix {
             throw new IllegalArgumentException("Parameter parallelism must be bigger than zero.");
         }
 
+        ForkJoinPool pool = new ForkJoinPool(parallelism);
         readLock.lock();
         other.readLock.lock();
-        ForkJoinPool pool = new ForkJoinPool(parallelism);
 
         try {
             return pool.invoke(new DivideAndConquerTask(this, other, parallelism));
@@ -185,66 +186,6 @@ public class Matrix {
     }
 
     /**
-     * Vízszintesen vágja félbe a mátrixot. Ha a sorok száma páratlan, az alsó
-     * mátrix lesz a nagyobb.
-     */
-    private Matrix[] splitHorizontally() {
-        int n1 = n / 2;
-        int n2 = n - n1;
-
-        BigDecimal[] data1 = Arrays.copyOfRange(data, 0, n1 * m);
-        BigDecimal[] data2 = Arrays.copyOfRange(data, n1 * m, n * m);
-        Matrix matrix1 = new Matrix(data1, n1);
-        Matrix matrix2 = new Matrix(data2, n2);
-
-        return new Matrix[] { matrix1, matrix2 };
-    }
-
-    /**
-     * Függőlegesen vágja félbe a mátrixot. Ha az oszlopok száma páratlan, a
-     * jobb oldali mátrix lesz a nagyobb.
-     */
-    private Matrix[] splitVertically() {
-        int m1 = m / 2;
-        int m2 = m - m1;
-
-        BigDecimal[] data1 = new BigDecimal[n * m1];
-        BigDecimal[] data2 = new BigDecimal[n * m2];
-        for (int i = 0; i < n; ++i) {
-            System.arraycopy(data, i * m, data1, i * m1, m1);
-            System.arraycopy(data, i * m + m1, data2, i * m2, m2);
-        }
-        Matrix matrix1 = new Matrix(data1, n);
-        Matrix matrix2 = new Matrix(data2, n);
-
-        return new Matrix[] { matrix1, matrix2 };
-    }
-
-    /**
-     * Hozzácsatol a mátrix alá egy másik mátrixot.
-     */
-    private Matrix appendBelow(final Matrix other) {
-        int newN = n + other.n;
-        BigDecimal[] newData = new BigDecimal[newN * m];
-        System.arraycopy(data, 0, newData, 0, data.length);
-        System.arraycopy(other.data, 0, newData, n * m, other.data.length);
-        return new Matrix(newData, newN);
-    }
-
-    /**
-     * Hozzácsatol a mátrix jobb oldalára egy másik mátrixot.
-     */
-    private Matrix appendRight(final Matrix other) {
-        int newM = m + other.m;
-        BigDecimal[] newData = new BigDecimal[n * newM];
-        for (int i = 0; i < n; ++i) {
-            System.arraycopy(data, i * m, newData, i * newM, m);
-            System.arraycopy(other.data, i * other.m, newData, i * newM + m, other.m);
-        }
-        return new Matrix(newData, n);
-    }
-
-    /**
      * Visszaadja a megadott pozíción lévõ értéket.
      * 
      * @param rowIndex
@@ -261,7 +202,7 @@ public class Matrix {
         }
     }
 
-    private BigDecimal getBigDecimalValueAt(final int rowIndex, final int colIndex) {
+    protected BigDecimal getBigDecimalValueAt(final int rowIndex, final int colIndex) {
         return data[rowIndex * m + colIndex];
     }
 
@@ -281,8 +222,22 @@ public class Matrix {
         writeLock.unlock();
     }
 
-    private void setBigDecimalValueAt(final int rowIndex, final int colIndex, final BigDecimal value) {
+    protected void setBigDecimalValueAt(final int rowIndex, final int colIndex, final BigDecimal value) {
         data[rowIndex * m + colIndex] = value;
+    }
+
+    /**
+     * A mátrix sorainak száma.
+     */
+    public int getN() {
+        return n;
+    }
+
+    /**
+     * A mátrix oszlopainak száma.
+     */
+    public int getM() {
+        return m;
     }
 
     @Override
@@ -360,7 +315,7 @@ public class Matrix {
                 int parallelism2 = parallelism - parallelism1;
 
                 if (max == matrix1.n) {
-                    Matrix[] split = matrix1.splitHorizontally();
+                    Matrix[] split = splitHorizontally(matrix1);
 
                     DivideAndConquerTask task1 = new DivideAndConquerTask(split[0], matrix2, parallelism1);
                     DivideAndConquerTask task2 = new DivideAndConquerTask(split[1], matrix2, parallelism2);
@@ -369,9 +324,9 @@ public class Matrix {
                     Matrix upper = task1.compute();
                     Matrix lower = task2.join();
 
-                    return upper.appendBelow(lower);
+                    return appendVertically(upper, lower);
                 } else if (max == matrix2.m) {
-                    Matrix[] split = matrix2.splitVertically();
+                    Matrix[] split = splitVertically(matrix2);
 
                     DivideAndConquerTask task1 = new DivideAndConquerTask(matrix1, split[0], parallelism1);
                     DivideAndConquerTask task2 = new DivideAndConquerTask(matrix1, split[1], parallelism2);
@@ -380,10 +335,10 @@ public class Matrix {
                     Matrix left = task1.compute();
                     Matrix right = task2.join();
 
-                    return left.appendRight(right);
+                    return appendHorizontally(left, right);
                 } else { // max == matrix1.m
-                    Matrix[] split1 = matrix1.splitVertically();
-                    Matrix[] split2 = matrix2.splitHorizontally();
+                    Matrix[] split1 = splitVertically(matrix1);
+                    Matrix[] split2 = splitHorizontally(matrix2);
 
                     DivideAndConquerTask task1 = new DivideAndConquerTask(split1[0], split2[0], parallelism1);
                     DivideAndConquerTask task2 = new DivideAndConquerTask(split1[1], split2[1], parallelism2);
@@ -397,6 +352,66 @@ public class Matrix {
             } else {
                 return doMultiplyAlgorithm(matrix1, matrix2);
             }
+        }
+
+        /**
+         * Vízszintesen vágja félbe a mátrixot. Ha a sorok száma páratlan, az
+         * alsó mátrix lesz a nagyobb.
+         */
+        private Matrix[] splitHorizontally(final Matrix matrix) {
+            int n1 = matrix.n / 2;
+            int n2 = matrix.n - n1;
+
+            BigDecimal[] data1 = Arrays.copyOfRange(matrix.data, 0, n1 * matrix.m);
+            BigDecimal[] data2 = Arrays.copyOfRange(matrix.data, n1 * matrix.m, matrix.n * matrix.m);
+            Matrix newMatrix1 = new Matrix(data1, n1);
+            Matrix newMatrix2 = new Matrix(data2, n2);
+
+            return new Matrix[] { newMatrix1, newMatrix2 };
+        }
+
+        /**
+         * Függőlegesen vágja félbe a mátrixot. Ha az oszlopok száma páratlan, a
+         * jobb oldali mátrix lesz a nagyobb.
+         */
+        private Matrix[] splitVertically(final Matrix matrix) {
+            int m1 = matrix.m / 2;
+            int m2 = matrix.m - m1;
+
+            BigDecimal[] data1 = new BigDecimal[matrix.n * m1];
+            BigDecimal[] data2 = new BigDecimal[matrix.n * m2];
+            for (int i = 0; i < matrix.n; ++i) {
+                System.arraycopy(matrix.data, i * matrix.m, data1, i * m1, m1);
+                System.arraycopy(matrix.data, i * matrix.m + m1, data2, i * m2, m2);
+            }
+            Matrix newMatrix1 = new Matrix(data1, matrix.n);
+            Matrix newMatrix2 = new Matrix(data2, matrix.n);
+
+            return new Matrix[] { newMatrix1, newMatrix2 };
+        }
+
+        /**
+         * Hozzácsatol egy mátrix alá egy másik mátrixot.
+         */
+        private Matrix appendVertically(final Matrix upper, final Matrix lower) {
+            int newN = upper.n + lower.n;
+            BigDecimal[] newData = new BigDecimal[newN * upper.m];
+            System.arraycopy(upper.data, 0, newData, 0, upper.data.length);
+            System.arraycopy(lower.data, 0, newData, upper.n * upper.m, lower.data.length);
+            return new Matrix(newData, newN);
+        }
+
+        /**
+         * Hozzácsatol egy mátrix jobb oldalára egy másik mátrixot.
+         */
+        private Matrix appendHorizontally(final Matrix left, final Matrix right) {
+            int newM = left.m + right.m;
+            BigDecimal[] newData = new BigDecimal[left.n * newM];
+            for (int i = 0; i < left.n; ++i) {
+                System.arraycopy(left.data, i * left.m, newData, i * newM, left.m);
+                System.arraycopy(right.data, i * right.m, newData, i * newM + left.m, right.m);
+            }
+            return new Matrix(newData, left.n);
         }
     }
 
