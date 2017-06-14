@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class Matrix {
 
-    private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.00");
+    private static ThreadLocal<DecimalFormat> NUMBER_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("0.00"));
 
     /**
      * Létrehoz egy n-edrendû egységmátrixot.
@@ -290,7 +290,7 @@ public class Matrix {
         readLock.lock();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < data.length; ++i) {
-            sb.append(NUMBER_FORMAT.format(data[i]));
+            sb.append(NUMBER_FORMAT.get().format(data[i]));
             if ((i + 1) % m != 0) {
                 sb.append(' ');
             } else if (i != data.length - 1) {
