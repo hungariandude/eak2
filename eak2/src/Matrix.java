@@ -106,7 +106,7 @@ public class Matrix {
      * @param n
      *            A mátrix sorainak száma
      */
-    public Matrix(final BigDecimal[] data, final int n) {
+    protected Matrix(final BigDecimal[] data, final int n) {
         this.data = data;
         this.n = n;
         this.m = data.length / n;
